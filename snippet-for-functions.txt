@@ -1,0 +1,21 @@
+add_action('rest_api_init', function() {
+    register_rest_field('post', 'acf', [
+        'get_callback' => function($post_arr) {
+            return get_fields($post_arr['id']);
+        },
+        'update_callback' => function($value, $post) {
+            foreach ($value as $field_name => $field_value) {
+                update_field($field_name, $field_value, $post->ID);
+            }
+            return true;
+        },
+        'schema' => [
+            'description' => __('ACF fields'),
+            'type' => 'object',
+            'context' => ['view', 'edit'],
+        ],
+    ]);
+});
+
+add_filter( 'wp_is_application_passwords_available', '__return_true' );
+add_filter( 'wp_is_application_passwords_available_for_user', '__return_true' );
