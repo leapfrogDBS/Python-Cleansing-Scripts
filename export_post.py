@@ -1,6 +1,8 @@
 import requests
 import pandas as pd
+import json
 from requests.auth import HTTPBasicAuth
+from bs4 import BeautifulSoup, Comment
 
 # Replace these with your actual site URL, username, and application password
 SITE_URL = "http://localhost/thelowdown/wp"
@@ -55,12 +57,21 @@ def fetch_post(post_id):
         print(f"Failed to fetch post: {response.status_code}")
         return None
 
-def save_posts_to_csv(posts, filename="blog_posts.csv"):
+def strip_html(content):
     """
-    Save the posts to a CSV file.
+    Strip HTML tags and comments from content.
     """
-    df = pd.DataFrame(posts)
-    df.to_csv(filename, index=False)
+    soup = BeautifulSoup(content, "html.parser")
+    for comment in soup.findAll(text=lambda text: isinstance(text, Comment)):
+        comment.extract()
+    return soup.get_text()
+
+def save_posts_to_json(posts, filename="blog_posts.json"):
+    """
+    Save the posts to a JSON file.
+    """
+    with open(filename, 'w', encoding='utf-8') as file:
+        json.dump(posts, file, ensure_ascii=False, indent=4)
     print(f"Saved {len(posts)} posts to {filename}")
 
 # Check authentication
@@ -70,7 +81,7 @@ check_authentication()
 post_ids = fetch_all_post_ids()
 print(f"Found {len(post_ids)} posts to process.")
 
-# Fetch each post content and prepare for CSV
+# Fetch each post content and prepare for JSON
 posts = []
 for post_id in post_ids:
     post = fetch_post(post_id)
@@ -78,8 +89,8 @@ for post_id in post_ids:
         posts.append({
             "ID": post["id"],
             "Title": post["title"]["rendered"],
-            "Content": post["content"]["rendered"]
+            "Content": strip_html(post["content"]["rendered"])
         })
 
-# Save all posts to CSV
-save_posts_to_csv(posts)
+# Save all posts to JSON
+save_posts_to_json(posts)
