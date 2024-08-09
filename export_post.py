@@ -8,6 +8,7 @@ from bs4 import BeautifulSoup, Comment
 SITE_URL = "http://localhost/thelowdown/wp"
 USERNAME = "dk.mcdonagh"
 APPLICATION_PASSWORD = "pHKP aLUu sqpo dC25 AENp MUbQ"
+LOCAL_PREFIX = "/thelowdown/wp"
 
 def check_authentication():
     """
@@ -59,12 +60,55 @@ def fetch_post(post_id):
 
 def strip_html(content):
     """
-    Strip HTML tags and comments from content.
+    Strip HTML tags and comments from content and extract media URLs, keeping relative URLs.
     """
     soup = BeautifulSoup(content, "html.parser")
+
+    # Remove comments
     for comment in soup.findAll(text=lambda text: isinstance(text, Comment)):
         comment.extract()
-    return soup.get_text()
+
+    # Extract image URLs
+    images = []
+    for img in soup.find_all('img'):
+        if 'src' in img.attrs:
+            src = img['src']
+            if src.startswith(LOCAL_PREFIX):
+                src = src[len(LOCAL_PREFIX):]
+            if not src.startswith('/'):
+                src = '/' + src
+            images.append(src)
+
+    # Extract video URLs
+    videos = []
+    for video in soup.find_all('video'):
+        for source in video.find_all('source'):
+            if 'src' in source.attrs:
+                src = source['src']
+                if src.startswith(LOCAL_PREFIX):
+                    src = src[len(LOCAL_PREFIX):]
+                if not src.startswith('/'):
+                    src = '/' + src
+                videos.append(src)
+
+    for iframe in soup.find_all('iframe'):
+        if 'src' in iframe.attrs:
+            src = iframe['src']
+            if src.startswith(LOCAL_PREFIX):
+                src = src[len(LOCAL_PREFIX):]
+            if not src.startswith('/'):
+                src = '/' + src
+            videos.append(src)
+
+    # Extract other embedded video links (YouTube, Vimeo)
+    embeds = soup.find_all('a', href=True)
+    video_urls = [embed['href'] for embed in embeds if 'youtube.com' in embed['href'] or 'vimeo.com' in embed['href']]
+    videos.extend(video_urls)
+
+    # Get cleaned text content
+    text_content = soup.get_text()
+
+    return text_content, images, videos
 
 def save_posts_to_json(posts, filename="blog_posts.json"):
     """
@@ -86,10 +130,13 @@ posts = []
 for post_id in post_ids:
     post = fetch_post(post_id)
     if post:
+        text_content, images, videos = strip_html(post["content"]["rendered"])
         posts.append({
             "ID": post["id"],
             "Title": post["title"]["rendered"],
-            "Content": strip_html(post["content"]["rendered"])
+            "Content": text_content,
+            "Images": images,
+            "Videos": videos
         })
 
 # Save all posts to JSON
